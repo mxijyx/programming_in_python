@@ -2,7 +2,6 @@ import configparser
 import json
 import csv
 import os
-import sys
 import logging
 from enum import Enum
 from random import choice, uniform
@@ -17,56 +16,42 @@ POSITION_LIMIT = 10
 SHEEP_STEP = 0.5
 WOLF_STEP = 1.0
 
-def euclidean_distance2(point1, point2):
-    return sum((cor1-cor2)**2 for cor1, cor2 in zip(point1, point2))
 
-class Direction(Enum):
-    # sheep can move only in the four main directions
-    NORTH = (0, 1) # (x,y)
-    SOUTH = (0, -1)
-    EAST = (1, 0)
-    WEST = (-1, 0)
+def euclidean_distance2(point1, point2):
+    return sum((cor1 - cor2) ** 2 for cor1, cor2 in zip(point1, point2))
+
+
+class UnitShift(Enum):
+    UP = (0, 1)
+    DOWN = (0, -1)
+    RIGHT = (1, 0)
+    LEFT = (-1, 0)
+
 
 class Sheep:
     def __init__(self, index, position: tuple):
         self.index = index
-        self._position = position
+        self.position = position
         self.alive = True
         self.step = SHEEP_STEP
 
-        logger.debug(f'Sheep number {self.index} initialized on position {position}')
-
-    @property
-    def position(self):
-        return self._position if self.alive else None
-    @position.setter
-    def position(self, value):
-        self._position = value
-
-    def __str__(self):
-        return f'Sheep {self.index} on position {self._position} is {'Alive' if self.alive else 'Dead'} and can move {self.step} steps'
-
     def move(self):
-        direction = choice(list(Direction))
-        logger.debug('Sheep moving in ', direction)
+        shift = choice(list(UnitShift))
+        logger.debug(f'Sheep {self.index + 1} moving {shift.name}')
 
-        if direction in (Direction.NORTH, Direction.SOUTH):
-            self.position = (self._position[0] + direction.value[0] * self.step, self._position[1])
-        elif direction in (Direction.EAST, Direction.WEST):
-            self.position = (self._position[0], self._position[1] + direction.value[1] * self.step)
+        if shift in (UnitShift.UP, UnitShift.DOWN):
+            self.position = (self.position[0], self.position[1] + shift.value[1] * self.step)
+        elif shift in (UnitShift.RIGHT, UnitShift.LEFT):
+            self.position = (self.position[0] + shift.value[0] * self.step, self.position[1])
 
-        logger.debug('Sheep moved to ', self._position)
+        logger.debug(f'Sheep {self.index + 1} moved to ({self.position[0]:.3f}, {self.position[1]:.3f})')
+
 
 class Wolf:
     def __init__(self, position: tuple):
         self.position = position
         self.prey = None
         self.step = WOLF_STEP
-
-    def __str__(self):
-        return f'Wolf on position {self.position} can move {WOLF_STEP}'
-
-    # check are all sheeps in herd alive in the main before parsing here
 
     def move(self, herd: list['Sheep']):
         logger.info('Wolf is chasing!')
@@ -75,33 +60,34 @@ class Wolf:
 
         self.prey = herd[0]
         for sheep in herd[1:]:
-            if euclidean_distance2(self.position, sheep.position) < euclidean_distance2(self.position, self.prey.position):
+            if euclidean_distance2(self.position, sheep.position) < euclidean_distance2(self.position,
+                                                                                        self.prey.position):
                 self.prey = sheep
-        logger.debug('Wolf prey is ', self.prey)
+        logger.debug('Wolf prey is sheep number %d', self.prey.index + 1)
 
         distance = sqrt(euclidean_distance2(self.position, self.prey.position))
-        logger.debug('The distance from the wolf to the sheep is ', distance)
+        logger.debug(f'The distance from the wolf to the sheep is {distance:.3f}')
 
         if distance <= self.step:
             self.position = self.prey.position
             self.prey.alive = False
-            logger.info(f'Wolf has moved to a position {self.position} and eaten a sheep {self.prey.index}')
+            logger.info(
+                f'Wolf has moved to a position ({self.position[0]:.3f}, {self.position[1]:.3f}) and eaten a sheep {self.prey.index + 1}')
         else:
-            move_vector = self.prey.position[0]-self.position[0], self.prey.position[1]-self.position[1]
-            logger.debug('Wolf will be moved in a direction of ', move_vector, 'vector')
+            move_vector = self.prey.position[0] - self.position[0], self.prey.position[1] - self.position[1]
+            logger.debug(f'Wolf will be moved in a direction of ({move_vector[0]:.3f}, {move_vector[1]:.3f}) vector')
 
-            step_length = hypot(*move_vector)
-            logger.debug(f'Wolf will move by a {step_length} step')
+            dist_to_sheep = hypot(*move_vector)
 
-            x = move_vector[0]/step_length
+            x = move_vector[0] / dist_to_sheep
             x *= self.step
-            y = move_vector[1]/step_length
+            y = move_vector[1] / dist_to_sheep
             y *= self.step
 
-            self.position = (self.position[0]+x,self.position[1]+y)
+            self.position = (self.position[0] + x, self.position[1] + y)
 
-            logger.info(f'Wolf is still chasing! The pray {self.prey.alive} stays alive!')
-        logger.debug(f'Wolf moved to position {self.position}')
+            logger.info(f'Wolf is still chasing! The pray {self.prey.index + 1} stays alive!')
+        logger.debug(f'Wolf moved to position ({self.position[0]:.3f}, {self.position[1]:.3f})')
 
 
 if __name__ == '__main__':
@@ -112,20 +98,21 @@ if __name__ == '__main__':
     wolf_step = WOLF_STEP
 
     arg_parser = ArgumentParser(
-        prog = 'Chasing Sheep',
-        description = 'Simulator of a wolf chasing a herd of sheep'
+        prog='Chasing Sheep',
+        description='Simulator of a wolf chasing a herd of sheep'
     )
 
     arg_parser.add_argument('-c', '--config', type=str, help='Load configuration from .ini file')
-    arg_parser.add_argument('-l', '--log', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], help='Logging level')
+    arg_parser.add_argument('-l', '--log', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                            help='Logging level')
     arg_parser.add_argument('-r', '--rounds', type=int, default=MAX_ROUNDS, help='Number of sheep rounds')
     arg_parser.add_argument('-s', '--sheep', type=int, default=SHEEP_NUMBER, help='Sheep number')
     arg_parser.add_argument('-w', '--wait', action='store_true', help='Wait until sheep moved for a set time')
 
-    args = arg_parser.parse_args(sys.argv[1:])
+    args = arg_parser.parse_args()
 
     if args.log:
-        logging.basicConfig(filename='chase.log', level=getattr(logging, args.l.upper()))
+        logging.basicConfig(filename='chase.log', level=getattr(logging, args.log.upper()))
     else:
         logging.disable()
 
@@ -155,36 +142,35 @@ if __name__ == '__main__':
             wolf_step = config.getfloat('Wolf', 'MoveDist')
             if wolf_step <= 0: raise ValueError('Wolf step must be positive')
 
-            logger.debug(f'.ini configuration file loaded with position {position_limit}, sheep step {sheep_step}, wolf step {wolf_step}')
+            logger.debug(
+                f'.ini configuration file loaded with position {position_limit}, sheep step {sheep_step}, wolf step {wolf_step}')
         else:
             raise FileNotFoundError('Configuration file not found')
-
 
     Sheep.step = sheep_step
     Wolf.step = wolf_step
 
-    ''' 
-    random.uniform(a, b)
-    Return a random floating-point number N such that a <= N <= b for a <= b and b <= N <= a for b < a.
-    '''
     herd = []
     for i in range(sheep_number):
         x = uniform(-position_limit, position_limit)
         y = uniform(-position_limit, position_limit)
         sheep = Sheep(i, (x, y))
+        logger.debug(
+            f'Sheep number {sheep.index + 1} initialized on position ({sheep.position[0]:.3f}, {sheep.position[1]:.3f})')
         herd.append(sheep)
 
     logger.info('\nHerd is ready for the game!')
 
-    wolf = Wolf((0,0))
+    wolf = Wolf((0, 0))
 
     results = []
     alive_after_r = []
 
-    for r in range(max_rounds):
+    for r in range(1, max_rounds + 1):
         alive_herd = [s for s in herd if s.alive]
         logger.info(f'Round {r} started!')
         print('--------------\nNew round started! Get ready!')
+        #input('\nPress enter to continue...')
         print('Round: ', r, ' Alive sheep: ', len(alive_herd))
 
         for sheep in alive_herd:
@@ -195,18 +181,20 @@ if __name__ == '__main__':
 
         wolf.move(alive_herd)
 
-        print(f'Wolf moved to position: {wolf.position[0]:.3f}, {wolf.position[1]:.3f}')
+        print(f'Wolf moved to position: ({wolf.position[0]:.3f}, {wolf.position[1]:.3f})')
         if wolf.prey and not wolf.prey.alive:
-            print(f'Sheep {wolf.prey.index} was eaten!')
+            print(f'Sheep {wolf.prey.index + 1} was hunted and eaten by the wolf!')
         elif wolf.prey and wolf.prey.alive:
-            print(f'Sheep {wolf.prey.index} has escaped the wolf!')
+            print(
+                f'Wolf is chasing sheep {wolf.prey.index + 1}, which is on the position: ({wolf.prey.position[0]:.3f}, {wolf.prey.position[1]:.3f})')
+            print(f'Sheep {wolf.prey.index + 1} has escaped the wolf!')
         alive_herd = [s for s in herd if s.alive]
 
         results.append(
             {
                 'round no': r,
                 'wolf_pos': wolf.position,
-                'sheep_pos': [s.position for s in herd]
+                'sheep_pos': [s.position if s.alive else None for s in herd]
             }
         )
         alive_after_r.append(len(alive_herd))
@@ -223,8 +211,6 @@ if __name__ == '__main__':
 
     print('\n---GAME OVER---')
 
-    ########################################
-
     json_file = 'pos.json'
 
     with open(json_file, 'w') as f:
@@ -235,4 +221,5 @@ if __name__ == '__main__':
     with open(csv_file, 'w') as f:
         writer = csv.writer(f, delimiter='\t', lineterminator='\n')
         writer.writerow(['Round Number', 'Number of alive sheep'])
-        writer.writerows(enumerate(alive_after_r))
+        writer.writerows((r + 1, count) for r, count in enumerate(alive_after_r))
+    logger.debug(f'Information was saved to location {os.path.abspath(csv_file)}')
